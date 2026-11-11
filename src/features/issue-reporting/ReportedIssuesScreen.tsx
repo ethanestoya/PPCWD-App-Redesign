@@ -77,42 +77,52 @@ export default function ReportedIssuesScreen({
             <p>Most recently submitted first</p>
           </div>
         </div>
-        <div className="reported-issues-list">
-          {requests.map((request) => {
-            const StatusIcon = statusIcon(request.status)
-            const evidenceCount = request.intake?.evidence.length ?? 0
-            return (
-              <button
-                type="button"
-                key={request.id}
-                onClick={() => onSelect(request)}
-              >
-                <span
-                  className={`reported-issue-icon status-${request.status
-                    .toLowerCase()
-                    .replace(/ /g, "-")}`}
+        {requests.length === 0 ? (
+          <div className="surface-card reported-issues-empty">
+            <strong>No reported issues yet</strong>
+            <p>
+              When you report a water concern, it will appear here with its
+              current status.
+            </p>
+          </div>
+        ) : (
+          <div className="reported-issues-list">
+            {requests.map((request) => {
+              const StatusIcon = statusIcon(request.status)
+              const evidenceCount = request.intake?.evidence.length ?? 0
+              return (
+                <button
+                  type="button"
+                  key={request.id}
+                  onClick={() => onSelect(request)}
                 >
-                  <StatusIcon aria-hidden="true" size={20} />
-                </span>
-                <span className="reported-issue-copy">
-                  <span>
-                    <strong>{request.type}</strong>
-                    <em>{request.status}</em>
+                  <span
+                    className={`reported-issue-icon status-${request.status
+                      .toLowerCase()
+                      .replace(/ /g, "-")}`}
+                  >
+                    <StatusIcon aria-hidden="true" size={20} />
                   </span>
-                  <small>
-                    {request.id} · {request.area}
-                  </small>
-                  <p>{request.description}</p>
-                  <small>
-                    {evidenceCount} evidence item
-                    {evidenceCount === 1 ? "" : "s"} · {request.createdAt}
-                  </small>
-                </span>
-                <ChevronRight aria-hidden="true" size={19} />
-              </button>
-            )
-          })}
-        </div>
+                  <span className="reported-issue-copy">
+                    <span>
+                      <strong>{request.type}</strong>
+                      <em>{request.status}</em>
+                    </span>
+                    <small>
+                      {request.id} · {request.area}
+                    </small>
+                    <p>{request.description}</p>
+                    <small>
+                      {evidenceCount} evidence item
+                      {evidenceCount === 1 ? "" : "s"} · {request.createdAt}
+                    </small>
+                  </span>
+                  <ChevronRight aria-hidden="true" size={19} />
+                </button>
+              )
+            })}
+          </div>
+        )}
       </section>
 
       <button

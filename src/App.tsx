@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BadgeCheck,
+  BarChart3,
   Bell,
   BellRing,
   Building2,
@@ -35,12 +36,20 @@ import {
   ReceiptText,
   ShieldCheck,
   Smartphone,
+  TrendingUp,
   TriangleAlert,
   UserRound,
   WalletCards,
   X,
 } from "lucide-react"
-import { FormEvent, lazy, ReactNode, Suspense, useState } from "react"
+import {
+  CSSProperties,
+  FormEvent,
+  lazy,
+  ReactNode,
+  Suspense,
+  useState,
+} from "react"
 import ReportIssueFlow from "./features/issue-reporting/ReportIssueFlow"
 import ReportedIssuesScreen from "./features/issue-reporting/ReportedIssuesScreen"
 import RequestStatusScreen from "./features/issue-reporting/RequestStatusScreen"
@@ -338,11 +347,68 @@ function IconButton({
 function Card({
   children,
   className = "",
+  style,
 }: {
   children: ReactNode
   className?: string
+  style?: CSSProperties
 }) {
-  return <div className={`surface-card ${className}`}>{children}</div>
+  return (
+    <div className={`surface-card ${className}`} style={style}>
+      {children}
+    </div>
+  )
+}
+
+function CircularProgress({
+  value,
+  size = 84,
+  stroke = 8,
+  label,
+  caption,
+}: {
+  value: number
+  size?: number
+  stroke?: number
+  label: string
+  caption?: string
+}) {
+  const radius = (size - stroke) / 2
+  const circumference = 2 * Math.PI * radius
+  const clamped = Math.max(0, Math.min(100, value))
+
+  return (
+    <div
+      className="circular-progress"
+      style={{ width: size, height: size }}
+      role="img"
+      aria-label={`${label}${caption ? ` ${caption}` : ""}`}
+    >
+      <svg viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle
+          className="circular-progress-track"
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          strokeWidth={stroke}
+        />
+        <circle
+          className="circular-progress-ring"
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#38bdf8"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - clamped / 100)}
+          strokeWidth={stroke}
+        />
+      </svg>
+      <span className="circular-progress-copy">
+        <strong>{label}</strong>
+        {caption ? <span>{caption}</span> : null}
+      </span>
+    </div>
+  )
 }
 
 function StatusBadge({ status }: { status: BillStatus | AdvisoryStatus }) {
@@ -450,14 +516,37 @@ function BottomNav({
   active: "home" | "bills" | "advisories" | "account"
   onNavigate: (screen: Screen) => void
 }) {
-  const items: { id: typeof active; label: string; icon: LucideIcon }[] = [
+  const items: {
+    id: typeof active
+    label: string
+    icon: LucideIcon
+    alert?: boolean
+    ariaLabel?: string
+  }[] = [
     { id: "home", label: "Home", icon: Home },
-    { id: "bills", label: "Bills", icon: ReceiptText },
+    {
+      id: "bills",
+      label: "Bills & Usage",
+      icon: ReceiptText,
+      alert: true,
+      ariaLabel:
+        "Bills & Usage, consumption alert, payment due in 3 days",
+    },
     { id: "advisories", label: "Advisories", icon: Bell },
-    { id: "account", label: "Account", icon: UserRound },
+    { id: "account", label: "Profile", icon: UserRound },
   ]
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) => item.id === active),
+  )
+
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
+      <span
+        className="bottom-nav-indicator"
+        aria-hidden="true"
+        style={{ transform: `translateX(${activeIndex * 100}%)` }}
+      />
       {items.map((item) => {
         const Icon = item.icon
         const isActive = active === item.id
@@ -467,14 +556,21 @@ function BottomNav({
             type="button"
             className={isActive ? "bottom-nav-item active" : "bottom-nav-item"}
             aria-current={isActive ? "page" : undefined}
+            aria-label={item.ariaLabel}
             onClick={() => onNavigate(item.id)}
           >
-            <Icon
-              aria-hidden="true"
-              size={21}
-              strokeWidth={isActive ? 2.5 : 2}
-            />
-            <span>{item.label}</span>
+            <span className="bottom-nav-icon">
+              <Icon
+                aria-hidden="true"
+                fill="none"
+                size={22}
+                strokeWidth={isActive ? 2.3 : 2}
+              />
+              {item.alert ? (
+                <span className="bottom-nav-alert" aria-hidden="true" />
+              ) : null}
+            </span>
+            <span className="bottom-nav-label">{item.label}</span>
           </button>
         )
       })}
@@ -531,8 +627,6 @@ function WelcomeScreen({
     <div className="welcome-screen">
       <div className="welcome-art" aria-hidden="true">
         <span className="water-orbit orbit-one" />
-        <span className="water-orbit orbit-two" />
-        <span className="water-orbit orbit-three" />
         <div className="seal-glow">
           <img src="/assets/ppcwd-seal.png" alt="" />
         </div>
@@ -704,14 +798,29 @@ function HomeScreen({
   activeRequest,
   requestCount,
   onOpenRequest,
+  onPayBill,
+  onViewBillsHistory,
 }: {
   go: (screen: Screen) => void
   pendingPayment: boolean
   activeRequest?: ServiceRequest
   requestCount: number
   onOpenRequest: (request: ServiceRequest) => void
+  onPayBill: () => void
+  onViewBillsHistory: () => void
 }) {
   const currentBill = bills[0]
+  const priorBalance = currentBill.arrears + currentBill.penalty
+  const priorBalanceShare = Math.round(
+    (priorBalance / currentBill.amount) * 100,
+  )
+  const [showBreakdown, setShowBreakdown] = useState(false)
+  const settled = !pendingPayment && currentBill.status === "Paid"
+  const meterLabel = pendingPayment
+    ? "Payment submitted, waiting for channel confirmation"
+    : settled
+      ? "This bill is settled"
+      : `This bill is unpaid; ${currency.format(priorBalance)} was carried forward from prior balances`
   return (
     <div className="screen-stack home-screen">
       <header className="home-header">
@@ -726,149 +835,6 @@ function HomeScreen({
         <span className="eyebrow">Good morning, Maria</span>
         <Heading level={1}>Here’s your water service at a glance.</Heading>
       </section>
-
-      <button
-        className="service-banner"
-        type="button"
-        onClick={() => go("advisory-detail")}
-      >
-        <span className="service-banner-icon">
-          <Droplets aria-hidden="true" size={21} />
-        </span>
-        <span className="service-banner-copy">
-          <strong>Service is normal at your address</strong>
-          <span>1 scheduled advisory nearby</span>
-        </span>
-        <ChevronRight aria-hidden="true" size={20} />
-      </button>
-
-      {pendingPayment ? (
-        <div className="alert alert-info" role="status">
-          <Clock3 aria-hidden="true" size={20} />
-          <div>
-            <strong>Payment confirmation pending</strong>
-            <p>
-              Payment channels may take 2–3 business days to update your
-              account.
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      {activeRequest ? (
-        <section className="active-request-section">
-          <div className="section-heading">
-            <Heading level={2}>Your reported issues</Heading>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => go("reported-issues")}
-            >
-              View all ({requestCount})
-            </button>
-          </div>
-          <button
-            className="active-request-card"
-            type="button"
-            onClick={() => onOpenRequest(activeRequest)}
-          >
-            <span className="active-request-icon">
-              <Camera aria-hidden="true" size={21} />
-            </span>
-            <span className="active-request-copy">
-              <span className="card-label">
-                Latest report · {activeRequest.id}
-              </span>
-              <strong>{activeRequest.type}</strong>
-              <small>
-                <b>{activeRequest.status}</b> · {activeRequest.area}
-              </small>
-            </span>
-            <ChevronRight aria-hidden="true" size={19} />
-          </button>
-        </section>
-      ) : null}
-
-      <Card className="bill-hero">
-        <div className="bill-hero-top">
-          <div>
-            <span className="card-label">Total amount due</span>
-            <p className="amount-display">
-              {currency.format(currentBill.amount)}
-            </p>
-          </div>
-          <StatusBadge
-            status={pendingPayment ? "Pending" : currentBill.status}
-          />
-        </div>
-        <div className="due-row">
-          <CalendarDays aria-hidden="true" size={18} />
-          <span>Due {currentBill.dueDate}</span>
-          <span className="due-pill">3 days left</span>
-        </div>
-        <div className="bill-hero-actions">
-          <Button onClick={() => go("payments")} icon={CreditCard}>
-            Pay bill
-          </Button>
-          <Button variant="secondary" onClick={() => go("bill-detail")}>
-            View details
-          </Button>
-        </div>
-      </Card>
-
-      <section>
-        <div className="section-heading">
-          <Heading level={2}>Quick actions</Heading>
-        </div>
-        <div className="quick-grid">
-          <QuickAction
-            label="Bill details"
-            icon={FileText}
-            onClick={() => go("bill-detail")}
-          />
-          <QuickAction
-            label="Payment options"
-            icon={WalletCards}
-            onClick={() => go("payments")}
-          />
-          <QuickAction
-            label="Usage history"
-            icon={History}
-            onClick={() => go("bills")}
-          />
-          <QuickAction
-            label="Report issue"
-            icon={Camera}
-            onClick={() => go("report-issue")}
-          />
-        </div>
-      </section>
-
-      <Card className="usage-card">
-        <div className="section-heading">
-          <div>
-            <span className="card-label">This billing period</span>
-            <Heading level={2}>Water consumption</Heading>
-          </div>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => go("bills")}
-          >
-            View history
-          </button>
-        </div>
-        <div className="usage-summary">
-          <div className="usage-gauge" aria-hidden="true">
-            <Droplets size={22} />
-          </div>
-          <div>
-            <strong>21 m³</strong>
-            <span>3 m³ more than last month</span>
-          </div>
-          <span className="trend-pill">+17%</span>
-        </div>
-      </Card>
 
       <section>
         <div className="section-heading">
@@ -886,6 +852,209 @@ function HomeScreen({
           onClick={() => go("advisory-detail")}
         />
       </section>
+
+      {pendingPayment ? (
+        <div className="alert alert-info" role="status">
+          <Clock3 aria-hidden="true" size={20} />
+          <div>
+            <strong>Payment confirmation pending</strong>
+            <p>
+              Payment channels may take 2–3 business days to update your
+              account.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="home-summary-row">
+        <Card className="bill-hero">
+          <div className="bill-hero-top">
+            <div>
+              <span className="card-label">Total amount due</span>
+              <p className="amount-display">
+                {currency.format(currentBill.amount)}
+              </p>
+            </div>
+            <StatusBadge
+              status={pendingPayment ? "Pending" : currentBill.status}
+            />
+          </div>
+          <div className="due-row">
+            <CalendarDays aria-hidden="true" size={18} />
+            <span>Due {currentBill.dueDate}</span>
+            <span
+              className="due-pill"
+              role="status"
+              aria-label="Due date reminder: 3 days left"
+            >
+              <span className="due-pulse" aria-hidden="true" />
+              Due in 3 days
+            </span>
+            <button
+              type="button"
+              className="bill-breakdown-toggle"
+              aria-expanded={showBreakdown}
+              aria-controls="bill-breakdown"
+              aria-label={
+                showBreakdown ? "Hide bill breakdown" : "Show bill breakdown"
+              }
+              onClick={() => setShowBreakdown((open) => !open)}
+            >
+              <ChevronDown aria-hidden="true" size={17} />
+            </button>
+          </div>
+          <p className="bill-status-line" role="status" aria-label={meterLabel}>
+            {pendingPayment
+              ? "Confirming payment — 2–3 business days"
+              : settled
+                ? "Nothing due — view receipts in bills history"
+                : `${priorBalanceShare}% prior balance · ${currency.format(priorBalance)} carried forward`}
+          </p>
+          <div
+            id="bill-breakdown"
+            className={`bill-breakdown${showBreakdown ? " open" : ""}`}
+            role="region"
+            aria-label="Amount due breakdown"
+          >
+            <div className="bill-breakdown-inner" aria-hidden={!showBreakdown}>
+              <div className="bill-breakdown-panel">
+                <div className="breakdown-row">
+                  <span>Current charges</span>
+                  <span>{currency.format(currentBill.currentBill)}</span>
+                </div>
+                <div className="breakdown-row">
+                  <span>Late penalty</span>
+                  <span>{currency.format(currentBill.penalty)}</span>
+                </div>
+                <div className="breakdown-row">
+                  <span>Arrears</span>
+                  <span>{currency.format(currentBill.arrears)}</span>
+                </div>
+                <div className="breakdown-row breakdown-total">
+                  <span>Total due</span>
+                  <span>{currency.format(currentBill.amount)}</span>
+                </div>
+                <p className="breakdown-note">
+                  {pendingPayment
+                    ? "Payment submitted. Channels may take 2–3 business days to confirm and lower this balance."
+                    : "Paying settles the full balance, including carried-forward arrears and penalty."}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="bill-hero-actions">
+            <Button onClick={onPayBill} icon={CreditCard}>
+              Pay bill
+            </Button>
+            <Button variant="secondary" onClick={onViewBillsHistory} icon={History}>
+              View bills history
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="usage-card">
+          <div className="section-heading">
+            <div>
+              <span className="card-label">This billing period</span>
+              <Heading level={2}>Water consumption</Heading>
+            </div>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => go("bills")}
+            >
+              View history
+            </button>
+          </div>
+          <div className="usage-summary">
+            <CircularProgress
+              value={72}
+              size={82}
+              stroke={8}
+              label="72%"
+              caption="of target"
+            />
+            <div className="usage-metrics">
+              <span className="card-label">Consumed</span>
+              <strong>21 m³</strong>
+              <span>3 m³ more than October</span>
+            </div>
+            <span
+              className="consumption-alert"
+              role="status"
+              aria-label="Consumption alert: 17 percent higher than last month"
+            >
+              <TriangleAlert aria-hidden="true" size={12} />
+              +17%
+            </span>
+          </div>
+        </Card>
+      </div>
+
+      <section>
+        <div className="section-heading">
+          <Heading level={2}>Quick actions</Heading>
+        </div>
+        <div className="quick-grid">
+          <QuickAction
+            label="Report issue"
+            icon={Camera}
+            onClick={() => go("report-issue")}
+          />
+        </div>
+      </section>
+
+      <section className="active-request-section">
+        <div className="section-heading">
+          <Heading level={2}>Your reported issues</Heading>
+          {requestCount > 0 ? (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => go("reported-issues")}
+            >
+              View all ({requestCount})
+            </button>
+          ) : null}
+        </div>
+        {activeRequest ? (
+          <button
+            className="active-request-card"
+            type="button"
+            onClick={() => onOpenRequest(activeRequest)}
+          >
+            <span className="active-request-icon">
+              <Camera aria-hidden="true" size={21} />
+            </span>
+            <span className="active-request-copy">
+              <span className="card-label">
+                Latest report · {activeRequest.id}
+              </span>
+              <strong>{activeRequest.type}</strong>
+              <small>
+                Current status: <b>{activeRequest.status}</b> ·{" "}
+                {activeRequest.area}
+              </small>
+            </span>
+            <ChevronRight aria-hidden="true" size={19} />
+          </button>
+        ) : (
+          <button
+            className="active-request-card"
+            type="button"
+            onClick={() => go("report-issue")}
+          >
+            <span className="active-request-icon">
+              <Camera aria-hidden="true" size={21} />
+            </span>
+            <span className="active-request-copy">
+              <strong>No reported issues yet</strong>
+              <small>Report a water concern and track its status here.</small>
+            </span>
+            <ChevronRight aria-hidden="true" size={19} />
+          </button>
+        )}
+      </section>
     </div>
   )
 }
@@ -899,7 +1068,7 @@ function AdvisoryCard({
 }) {
   return (
     <button className="advisory-card" type="button" onClick={onClick}>
-      <span className="advisory-icon">
+      <span className={`advisory-icon advisory-icon-${advisory.status.toLowerCase()}`}>
         {advisory.status === "Resolved" ? (
           <CheckCircle2 aria-hidden="true" size={21} />
         ) : (
@@ -907,10 +1076,7 @@ function AdvisoryCard({
         )}
       </span>
       <span className="advisory-copy">
-        <span className="advisory-meta">
-          <StatusBadge status={advisory.status} />
-          <span>{advisory.updated}</span>
-        </span>
+        <span className="advisory-meta">{advisory.updated}</span>
         <strong>{advisory.title}</strong>
         <span>{advisory.affectedAreas}</span>
       </span>
@@ -1063,7 +1229,10 @@ function ConsumptionChart() {
           <span className="card-label">Current usage</span>
           <strong>21 m³</strong>
         </div>
-        <span className="trend-pill">+17% vs last month</span>
+        <span className="trend-pill">
+          <TrendingUp aria-hidden="true" size={12} />
+          +17% vs last month
+        </span>
       </div>
       <svg
         className="usage-chart"
@@ -1076,21 +1245,20 @@ function ConsumptionChart() {
           Consumption was 21 cubic meters in July, 17 in August, 20 in
           September, 18 in October, and 21 in November.
         </desc>
-        <defs>
-          <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
-            <stop
-              offset="0%"
-              stopColor="var(--color-cyan)"
-              stopOpacity="0.28"
-            />
-            <stop offset="100%" stopColor="var(--color-cyan)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
         <line x1="18" x2="326" y1="108" y2="108" className="chart-grid" />
         <line x1="18" x2="326" y1="66" y2="66" className="chart-grid" />
+        <line x1="18" x2="326" y1="72" y2="72" className="chart-average" />
+        <text
+          x="326"
+          y="68"
+          textAnchor="end"
+          className="chart-average-label"
+        >
+          {"Avg 19 m³"}
+        </text>
         <path
           d="M20 54 L96 86 L172 62 L248 78 L324 54 L324 110 L20 110 Z"
-          fill="url(#chartFill)"
+          fill="rgba(125, 211, 252, 0.32)"
         />
         <polyline
           points="20,54 96,86 172,62 248,78 324,54"
@@ -1127,6 +1295,62 @@ function ConsumptionChart() {
   )
 }
 
+const monthlyUsage: { month: string; value: number; current?: boolean }[] = [
+  { month: "Jun", value: 16 },
+  { month: "Jul", value: 21 },
+  { month: "Aug", value: 17 },
+  { month: "Sep", value: 20 },
+  { month: "Oct", value: 18 },
+  { month: "Nov", value: 21, current: true },
+]
+
+function MonthlyUsageBars() {
+  const max = Math.max(...monthlyUsage.map((item) => item.value))
+  return (
+    <div className="usage-bars">
+      <div className="section-heading">
+        <div>
+          <span className="card-label">Last six months</span>
+          <Heading level={2}>Monthly usage</Heading>
+        </div>
+        <span className="trend-pill">
+          <BarChart3 aria-hidden="true" size={12} />
+          {"m\u00B3 / month"}
+        </span>
+      </div>
+      <div
+        className="usage-bars-chart"
+        role="img"
+        aria-label="Monthly water usage: June 16, July 21, August 17, September 20, October 18, November 21 cubic meters."
+      >
+        {monthlyUsage.map((item) => (
+          <div
+            className={`usage-bar-column${item.current ? " current" : ""}`}
+            key={item.month}
+          >
+            <span className="usage-bar-value">{item.value}</span>
+            <span className="usage-bar-track">
+              <span
+                className="usage-bar"
+                style={
+                  {
+                    "--bar-height": `${Math.round((item.value / max) * 100)}%`,
+                  } as React.CSSProperties
+                }
+              />
+            </span>
+            <span className="usage-bar-label">{item.month}</span>
+          </div>
+        ))}
+      </div>
+      <div className="usage-bars-foot">
+        <span>{"Average 18.8 m\u00B3"}</span>
+        <span>{"Peak 21 m\u00B3"}</span>
+      </div>
+    </div>
+  )
+}
+
 function BillsScreen({ onSelect }: { onSelect: (bill: Bill) => void }) {
   return (
     <div className="screen-stack">
@@ -1137,12 +1361,15 @@ function BillsScreen({ onSelect }: { onSelect: (bill: Bill) => void }) {
       <Card>
         <ConsumptionChart />
       </Card>
+      <Card>
+        <MonthlyUsageBars />
+      </Card>
       <div className="comparison-strip">
         <div>
-          <Droplets aria-hidden="true" size={20} />
+          <CircularProgress value={72} size={54} stroke={6} label="72%" />
           <span>
             <strong>3 m³ higher</strong>
-            <small>than October</small>
+            <small>than October · 72% of target</small>
           </span>
         </div>
         <p>Tip: Check for dripping taps and running toilets.</p>
@@ -1331,12 +1558,16 @@ function PaymentDetailScreen({
 function PaymentPendingScreen({ onDone }: { onDone: () => void }) {
   return (
     <div className="completion-screen">
-      <div className="completion-icon">
-        <Clock3 aria-hidden="true" size={34} />
+      <div className="payment-success" aria-hidden="true">
+        <span className="payment-success-ring" />
+        <span className="payment-success-ring late" />
+        <div className="payment-success-check">
+          <Check size={34} strokeWidth={3} />
+        </div>
       </div>
-      <span className="eyebrow">Awaiting confirmation</span>
+      <span className="eyebrow">Payment submitted</span>
       <Heading level={1}>
-        Your account will update after payment is posted.
+        Your account will update once payment is confirmed.
       </Heading>
       <p>
         This prototype did not process a real payment. In the live experience,
@@ -1452,11 +1683,7 @@ function AdvisoryDetailScreen({
   return (
     <div className="screen-stack">
       <ScreenHeader title="Advisory details" onBack={onBack} />
-      <div
-        className={`advisory-hero ${
-          advisory.status === "Resolved" ? "resolved" : ""
-        }`}
-      >
+      <div className={`advisory-hero advisory-${advisory.status.toLowerCase()}`}>
         <StatusBadge status={advisory.status} />
         <Heading level={1}>{advisory.title}</Heading>
         <p>{advisory.summary}</p>
@@ -1537,12 +1764,16 @@ function AccountScreen({
   onUnlink,
   notify,
   onReportIssue,
+  onViewReportedIssues,
+  requestCount,
 }: {
   notifications: boolean
   setNotifications: (value: boolean) => void
   onUnlink: () => void
   notify: (message: string) => void
   onReportIssue: () => void
+  onViewReportedIssues: () => void
+  requestCount: number
 }) {
   const contact = (value: string) => {
     if (value.startsWith("http")) {
@@ -1554,7 +1785,7 @@ function AccountScreen({
   return (
     <div className="screen-stack">
       <ScreenHeader
-        title="Account & help"
+        title="Profile & help"
         subtitle="Manage your linked service."
       />
       <Card className="profile-card">
@@ -1601,6 +1832,24 @@ function AccountScreen({
           <small>Share a photo, voice note, description, and location.</small>
         </span>
         <ChevronRight aria-hidden="true" size={20} />
+      </button>
+      <button
+        className="action-row"
+        type="button"
+        onClick={onViewReportedIssues}
+      >
+        <span className="action-row-icon">
+          <FileText aria-hidden="true" size={20} />
+        </span>
+        <span>
+          <strong>Reported issues</strong>
+          <small>
+            {requestCount > 0
+              ? `View ${requestCount} report${requestCount === 1 ? "" : "s"} and current status`
+              : "No reports yet · track future issues here"}
+          </small>
+        </span>
+        <ChevronRight aria-hidden="true" size={17} />
       </button>
       <div className="notification-row">
         <div>
@@ -1733,6 +1982,126 @@ function ConfirmSheet({
   )
 }
 
+function HomeBillSheet({
+  bill,
+  onClose,
+  onSelectMethod,
+  onViewAllPayments,
+}: {
+  bill: Bill
+  onClose: () => void
+  onSelectMethod: (method: PaymentMethod) => void
+  onViewAllPayments: () => void
+}) {
+  const [showMethods, setShowMethods] = useState(false)
+  const titleId = "pay-sheet-title"
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <div
+        className="bottom-sheet bill-overlay-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="sheet-handle" />
+        <IconButton label="Close" icon={X} onClick={onClose} />
+        <span className="sheet-icon sheet-icon-pay">
+          <CreditCard aria-hidden="true" size={24} />
+        </span>
+        <Heading level={2} className="sheet-title">
+          <span id={titleId}>Pay bill</span>
+        </Heading>
+        <div className="bill-overlay-total">
+          <span className="card-label">Total amount due</span>
+          <strong>{currency.format(bill.amount)}</strong>
+          <span>Due {bill.dueDate}</span>
+        </div>
+        <div className="bill-overlay-section">
+          <h3>Bill details</h3>
+          <p>
+            {bill.shortPeriod} · {bill.period}
+          </p>
+          <dl className="detail-list bill-overlay-details">
+            <div>
+              <dt>Current water bill</dt>
+              <dd>{currency.format(bill.currentBill)}</dd>
+            </div>
+            {bill.arrears > 0 ? (
+              <div>
+                <dt>Previous balance</dt>
+                <dd>{currency.format(bill.arrears)}</dd>
+              </div>
+            ) : null}
+            {bill.penalty > 0 ? (
+              <div>
+                <dt>Penalty</dt>
+                <dd>{currency.format(bill.penalty)}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>Senior discount</dt>
+              <dd>−{currency.format(bill.discount)}</dd>
+            </div>
+            <div>
+              <dt>Consumption</dt>
+              <dd>{bill.consumption} m³</dd>
+            </div>
+            <div className="detail-total">
+              <dt>Total amount due</dt>
+              <dd>{currency.format(bill.amount)}</dd>
+            </div>
+          </dl>
+        </div>
+        {showMethods ? (
+          <>
+            <div className="bill-overlay-list">
+              {paymentMethods.slice(0, 4).map((method) => {
+                const Icon = method.icon
+                return (
+                  <button
+                    key={method.id}
+                    type="button"
+                    className="method-row"
+                    onClick={() => onSelectMethod(method)}
+                  >
+                    <span className="method-icon">
+                      <Icon aria-hidden="true" size={22} />
+                    </span>
+                    <span className="method-copy">
+                      <strong>{method.name}</strong>
+                      <span>{method.description}</span>
+                      <small>{method.timing}</small>
+                    </span>
+                    <ChevronRight aria-hidden="true" size={20} />
+                  </button>
+                )
+              })}
+            </div>
+            <Button
+              variant="secondary"
+              className="button-full"
+              onClick={onViewAllPayments}
+            >
+              View all payment options
+            </Button>
+          </>
+        ) : (
+          <div className="bill-overlay-section">
+            <Button
+              className="button-full"
+              icon={WalletCards}
+              onClick={() => setShowMethods(true)}
+            >
+              Choose payment method
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ConsumerApp({
   onStaffAccess,
   submittedRequests,
@@ -1742,7 +2111,7 @@ function ConsumerApp({
   submittedRequests: ServiceRequest[]
   onSubmitRequest: (request: ServiceRequest) => void
 }) {
-  const [screen, setScreen] = useState<Screen>("welcome")
+  const [screen, setScreen] = useState<Screen>("home")
   const [history, setHistory] = useState<Screen[]>([])
   const [selectedBill, setSelectedBill] = useState<Bill>(bills[0])
   const [selectedAdvisory, setSelectedAdvisory] = useState<Advisory>(
@@ -1754,6 +2123,7 @@ function ConsumerApp({
   const [notifications, setNotifications] = useState(true)
   const [pendingPayment, setPendingPayment] = useState(false)
   const [showUnlink, setShowUnlink] = useState(false)
+  const [homeSheet, setHomeSheet] = useState<"pay" | null>(null)
   const [toast, setToast] = useState("")
   const activeRequest = submittedRequests[0]
   const [selectedRequestId, setSelectedRequestId] = useState<string>()
@@ -1785,13 +2155,19 @@ function ConsumerApp({
     window.setTimeout(() => setToast(""), 2400)
   }
 
-  const activeTab =
-    screen === "home" ||
-    screen === "bills" ||
-    screen === "advisories" ||
-    screen === "account"
-      ? screen
-      : undefined
+  const tabForScreen: Partial<
+    Record<Screen, "home" | "bills" | "advisories" | "account">
+  > = {
+    home: "home",
+    bills: "bills",
+    "bill-detail": "bills",
+    payments: "bills",
+    "payment-detail": "bills",
+    advisories: "advisories",
+    "advisory-detail": "advisories",
+    account: "account",
+  }
+  const activeTab = tabForScreen[screen]
 
   let content: ReactNode
   if (screen === "welcome") {
@@ -1816,6 +2192,8 @@ function ConsumerApp({
           setSelectedRequestId(request.id)
           go("request-status")
         }}
+        onPayBill={() => setHomeSheet("pay")}
+        onViewBillsHistory={() => go("bills")}
       />
     )
   } else if (screen === "bills") {
@@ -1892,6 +2270,7 @@ function ConsumerApp({
         confirmation
         onBack={() => go("request-status")}
         onHome={() => navigateTab("home")}
+        onViewAll={() => go("reported-issues")}
       />
     )
   } else if (screen === "reported-issues") {
@@ -1922,6 +2301,8 @@ function ConsumerApp({
         onUnlink={() => setShowUnlink(true)}
         notify={notify}
         onReportIssue={() => go("report-issue")}
+        onViewReportedIssues={() => go("reported-issues")}
+        requestCount={submittedRequests.length}
       />
     )
   }
@@ -1939,6 +2320,21 @@ function ConsumerApp({
             setPendingPayment(false)
             setHistory([])
             setScreen("welcome")
+          }}
+        />
+      ) : null}
+      {homeSheet ? (
+        <HomeBillSheet
+          bill={bills[0]}
+          onClose={() => setHomeSheet(null)}
+          onSelectMethod={(method) => {
+            setSelectedMethod(method)
+            setHomeSheet(null)
+            go("payment-detail")
+          }}
+          onViewAllPayments={() => {
+            setHomeSheet(null)
+            go("payments")
           }}
         />
       ) : null}

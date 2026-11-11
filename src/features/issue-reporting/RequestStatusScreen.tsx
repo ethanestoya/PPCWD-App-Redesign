@@ -27,11 +27,13 @@ export default function RequestStatusScreen({
   confirmation = false,
   onBack,
   onHome,
+  onViewAll,
 }: {
   request: ServiceRequest
   confirmation?: boolean
   onBack: () => void
   onHome: () => void
+  onViewAll?: () => void
 }) {
   const active = completedStage(request)
   const evidenceCount = request.intake?.evidence.length ?? 0
@@ -74,6 +76,15 @@ export default function RequestStatusScreen({
           >
             Track request <ChevronRight aria-hidden="true" size={18} />
           </button>
+          {onViewAll ? (
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={onViewAll}
+            >
+              View all reported issues
+            </button>
+          ) : null}
           <button
             className="button button-secondary"
             type="button"

@@ -1,7 +1,9 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowDownRight,
   ArrowLeft,
+  ArrowUpRight,
   BarChart3,
   Bell,
   Check,
@@ -649,20 +651,36 @@ function StatCard({
   note,
   icon: Icon,
   tone = "blue",
+  trend = "",
+  trendDirection = "up",
 }: {
   label: string
   value: string | number
   note: string
   icon: LucideIcon
   tone?: "blue" | "cyan" | "amber" | "red"
+  trend?: string
+  trendDirection?: "up" | "down" | "neutral"
 }) {
+  const TrendIcon =
+    trendDirection === "down" ? ArrowDownRight : ArrowUpRight
   return (
     <OpsCard className="ops-stat-card">
-      <span className={`ops-stat-icon ${tone}`}>
-        <Icon aria-hidden="true" size={20} />
-      </span>
-      <div>
-        <span>{label}</span>
+      <div className="ops-stat-top">
+        <span className={`ops-stat-icon ${tone}`}>
+          <Icon aria-hidden="true" size={19} />
+        </span>
+        {trend ? (
+          <span className={`ops-stat-trend ${trendDirection}`}>
+            {trendDirection !== "neutral" ? (
+              <TrendIcon aria-hidden="true" size={12} />
+            ) : null}
+            {trend}
+          </span>
+        ) : null}
+      </div>
+      <div className="ops-stat-body">
+        <span className="ops-stat-label">{label}</span>
         <strong>{value}</strong>
         <small>{note}</small>
       </div>
@@ -722,6 +740,7 @@ function OverviewScreen({
           note="2 need attention today"
           icon={ListChecks}
           tone="blue"
+          trend="+4 today"
         />
         <StatCard
           label="Payments to review"
@@ -729,6 +748,7 @@ function OverviewScreen({
           note="Includes one flagged record"
           icon={WalletCards}
           tone="cyan"
+          trend="2 new"
         />
         <StatCard
           label="Service advisories"
@@ -736,6 +756,7 @@ function OverviewScreen({
           note="1 scheduled, 1 in review"
           icon={Bell}
           tone="amber"
+          trend="1 active"
         />
         {session.role === "admin" ? (
           <StatCard
@@ -744,6 +765,8 @@ function OverviewScreen({
             note="Oldest waiting 1 hour"
             icon={ClipboardCheck}
             tone="red"
+            trend="1h oldest"
+            trendDirection="neutral"
           />
         ) : (
           <StatCard
@@ -752,6 +775,8 @@ function OverviewScreen({
             note="Across 3 service areas"
             icon={Clock3}
             tone="red"
+            trend="3 areas"
+            trendDirection="down"
           />
         )}
       </section>
