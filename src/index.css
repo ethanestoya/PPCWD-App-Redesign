@@ -88,6 +88,7 @@ body {
   min-height: 100vh;
   margin: 0;
   font-size: 16px;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 50% 0%, rgba(186, 230, 253, 0.24), transparent 34%),
     var(--color-canvas);
@@ -187,7 +188,7 @@ p {
 
 .screen-header h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: clamp(1.35rem, 1.05rem + 1.7vw, 1.9rem);
   line-height: 1.25;
   letter-spacing: -0.025em;
 }
