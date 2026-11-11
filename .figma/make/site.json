@@ -1,0 +1,10 @@
+{
+  "description": "Enhance user experience for PPCWD's mobile app by streamlining navigation and improving interface design, making it more accessible for users.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
